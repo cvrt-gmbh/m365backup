@@ -1,0 +1,28 @@
+[package]
+name = "m365backup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Open-source Microsoft 365 backup CLI"
+
+[[bin]]
+name = "m365backup"
+path = "src/main.rs"
+
+[dependencies]
+m365backup-core = { path = "../core" }
+m365backup-graph = { path = "../graph" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+indicatif = { workspace = true }
+console = { workspace = true }
+dialoguer = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+dirs = { workspace = true }
