@@ -24,6 +24,64 @@ impl GraphClient {
         Self { auth, http }
     }
 
+    /// Like `get_json`, but returns `Ok(None)` on HTTP 410 Gone (delta expired).
+    pub async fn get_json_or_gone<T: DeserializeOwned>(&self, path: &str) -> Result<Option<T>> {
+        let url = if path.starts_with("https://") {
+            path.to_string()
+        } else {
+            format!("{GRAPH_BASE}{path}")
+        };
+
+        let mut retries = 0;
+        loop {
+            let token = self.auth.get_token().await?;
+            let resp = self
+                .http
+                .get(&url)
+                .bearer_auth(&token)
+                .send()
+                .await
+                .with_context(|| format!("GET {url} failed"))?;
+
+            let status = resp.status();
+
+            if status == reqwest::StatusCode::GONE {
+                warn!(url = %url, "410 Gone — delta token expired");
+                return Ok(None);
+            }
+
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                || status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+            {
+                retries += 1;
+                if retries > MAX_RETRIES {
+                    anyhow::bail!("max retries exceeded for {url}");
+                }
+                let retry_after = resp
+                    .headers()
+                    .get("Retry-After")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(2u64.pow(retries));
+                warn!(url = %url, retry_after, retries, "rate limited, backing off");
+                tokio::time::sleep(Duration::from_secs(retry_after)).await;
+                continue;
+            }
+
+            if !status.is_success() {
+                let body = resp.text().await.unwrap_or_default();
+                anyhow::bail!("GET {url} returned {status}: {body}");
+            }
+
+            debug!(url = %url, "OK");
+            return resp
+                .json()
+                .await
+                .map(Some)
+                .context("failed to deserialize response");
+        }
+    }
+
     pub async fn get_json<T: DeserializeOwned>(&self, path: &str) -> Result<T> {
         let url = if path.starts_with("https://") {
             path.to_string()

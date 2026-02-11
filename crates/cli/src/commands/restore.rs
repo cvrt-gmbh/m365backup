@@ -5,6 +5,7 @@ use clap::Args;
 use tracing::info;
 
 use m365backup_core::Repository;
+use m365backup_core::snapshot::NodeType;
 
 use crate::config::AppConfig;
 use crate::progress;
@@ -82,6 +83,33 @@ pub async fn run(args: RestoreArgs) -> Result<()> {
     }
 
     pb.finish_with_message("done");
-    println!("Restored {restored} files to {}", target.display());
+
+    // Item-type breakdown
+    let mail_count = nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Mail)
+        .count();
+    let cal_count = nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Calendar)
+        .count();
+    let contact_count = nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Contact)
+        .count();
+    let file_count = nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::File)
+        .count();
+
+    println!("Restored {restored} items to {}", target.display());
+    if mail_count > 0 || cal_count > 0 || contact_count > 0 {
+        println!(
+            "  Breakdown: {} mail, {} calendar, {} contacts",
+            mail_count, cal_count, contact_count
+        );
+    } else if file_count > 0 {
+        println!("  Breakdown: {} files", file_count);
+    }
     Ok(())
 }
